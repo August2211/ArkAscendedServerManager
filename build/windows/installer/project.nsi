@@ -82,15 +82,22 @@ FunctionEnd
 Section
     !insertmacro wails.setShellContext
 
+    # Install C++ Redistributable x86
+    SetOutPath $TEMP
+    File ".\VC_redist.x86.exe"
+
+    ExecWait '"$TEMP\VC_redist.x86.exe" /install /quiet /norestart'
+    # Install C++ Redistributable x64
+    SetOutPath $TEMP
+    File ".\VC_redist.x64.exe"
+
+    ExecWait '"$TEMP\VC_redist.x64.exe" /install /quiet /norestart'
+
     !insertmacro wails.webview2runtime
-
     SetOutPath $INSTDIR
-    
     !insertmacro wails.files
-
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-
     !insertmacro wails.writeUninstaller
 SectionEnd
 
