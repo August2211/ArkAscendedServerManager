@@ -10,7 +10,7 @@ For now the only way is to use the [nightly](https://github.com/JensvandeWiel/Ar
 #### Setting steamcmd path for first use
 Steamcmd is not yet packaged with the app, if you want to create a server with AASM you can install steamcmd to your path on your computer (e.g.: with [scoop](https://scoop.sh/#/apps?q=steamcmd&id=aed594e2b74d756901130cc098dfb2f70679d8dc)) or you can follow the guide below.
 
- 1. Install the app using the installer
+ 1. Install the app using the installer found [here](https://github.com/JensvandeWiel/ArkAscendedServerManager/releases/latest/download/Ark-Ascended-Server-Manager-amd64-installer.exe)
  2. Run the app for the first time
  3. Click [windows key] + R and enter `%localappdata%\ArkAscendedServerManager`
  4. Open config.json
@@ -18,6 +18,6 @@ Steamcmd is not yet packaged with the app, if you want to create a server with A
  6. Start the app again and create a server.
  7. :tada: You can run your server!
 ### Contributing
-Ask one of **the core contributors** in the [discord server](https://discord.gg/pBfmFuK2Wa)  to give you contributor role, then you can ask what to do. Or you can just make a pull request with some code you've written. 
+Check out the [Contributing Guide](https://github.com/JensvandeWiel/ArkAscendedServerManager/blob/main/CONTRIBUTING.md) to get started with contributing! Once your first contribution is merged you can head over to our [Discord Server](https://discord.gg/vcfNeZ3SDN) and ask for the 'Contributor' role :D
 ### :warning: Watch out :warning:
 This project is still only in very early alpha, so there are still many features to come!

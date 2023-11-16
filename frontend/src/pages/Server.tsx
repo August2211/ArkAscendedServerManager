@@ -1,7 +1,7 @@
 import {
     Button,
     ButtonGroup,
-    Card, Checkbox, DialogActions,
+    Card, DialogActions,
     DialogContent,
     DialogTitle,
     Divider, IconButton,
@@ -21,7 +21,7 @@ import {
     ForceStopServer,
     GetServer, GetServerStatus,
     SaveServer,
-    StartServer
+    StartServer, StopServer
 } from "../../wailsjs/go/server/ServerController";
 import {InstallUpdater} from "./InstallUpdater";
 import {useAlert} from "../components/AlertProvider";
@@ -52,6 +52,8 @@ export const Server = ({id, className}: Props) => {
     const [isInstalled, setIsInstalled] = useState(false)
     const [serverStatus, setServerStatus] = useState(false)
     const [forceStopModalOpen, setForceStopModalOpen] = useState(false)
+    const [startModalOpen, setStartModalOpen] = useState(false)
+
     const [updaterModalOpen, setUpdaterModalOpen] = useState(false)
     const {addAlert} = useAlert()
 
@@ -86,6 +88,15 @@ export const Server = ({id, className}: Props) => {
         }
     }, [serv]);
 
+    useEffect(() => {
+        EventsOn("reloadServers", () => {
+            if (id !== undefined) {
+                GetServer(id).then((s) => {setServ(s)}).catch((reason) => console.error(reason))
+            }
+        })
+        return () => EventsOff("reloadServers")
+    }, []);
+
     //endregion
 
     function onServerStartButtonClicked() {
@@ -119,13 +130,7 @@ export const Server = ({id, className}: Props) => {
 
     function onServerStopButtonClicked() {
         addAlert("Stopping server...", "neutral")
-        SendRconCommand("saveworld", serv.ipAddress, serv.rconPort, serv.adminPassword)
-            .then((resp) => {
-                //send quit command
-                SendRconCommand("doexit", serv.ipAddress, serv.rconPort, serv.adminPassword)
-                    .catch((err) => addAlert("error sending exit command: " + err, "danger"));
-            })
-            .catch((err) => addAlert("error sending save command: " + err, "danger"));
+        StopServer(serv.id).then(() => addAlert("Stopped server", "success")).catch((err) => addAlert("error stopping server: " + err, "danger"));
     }
 
     function onServerForceStopButtonClicked() {
@@ -147,7 +152,7 @@ export const Server = ({id, className}: Props) => {
                 {isInstalled? (<Tabs size="sm" className={'flex h-full w-full overflow-y-auto'}>
                     <div className={'h-16 flex w-full'}>
                         <div className="flex items-center">
-                            <Input value={serv?.serverAlias} onChange={(e) => setServ((p) => ({ ...p, serverAlias: e.target.value }))}/>
+                            <Input value={serv?.serverAlias} onChange={(e) => setServ((p) => ({ ...p, serverAlias: e.target.value, convertValues: p.convertValues }))}/>
                             <Tooltip title={"Open server install directory"}>
                                 <IconButton className="text-lg font-bold ml-2" onClick={() => BrowserOpenURL("file:///" + serv.serverPath)}><IconExternalLink/></IconButton>
                             </Tooltip>
@@ -156,7 +161,7 @@ export const Server = ({id, className}: Props) => {
 
                         <div className={'ml-auto my-auto mr-8'}>
                             <ButtonGroup aria-label="outlined primary button group">
-                                <Button color={'success'} variant="solid" disabled={serverStatus} onClick={onServerStartButtonClicked}>Start</Button>
+                                <Button color={'success'} variant="solid" disabled={serverStatus} onClick={() => {serv?.useIniConfig? startServer() : setStartModalOpen(true)}}>Start</Button>
                                 <Button color={'danger'} variant="solid" disabled={!serverStatus} onClick={onServerStopButtonClicked}>Stop</Button>
                                 <Button color={'danger'} variant="solid" disabled={!serverStatus} onClick={() => setForceStopModalOpen(true)}>Force stop</Button>
                             </ButtonGroup>
@@ -179,6 +184,31 @@ export const Server = ({id, className}: Props) => {
                                         <Button variant="plain" color="neutral" onClick={() => setForceStopModalOpen(false)}>
                                             Cancel
                                         </Button>
+                                    </DialogActions>
+                                </ModalDialog>
+                            </Modal>
+                            <Modal open={startModalOpen} onClose={() => setStartModalOpen(false)}>
+                                <ModalDialog variant="outlined" role="alertdialog">
+                                    <DialogTitle>
+                                        <IconAlertCircleFilled/>
+                                        Confirmation
+                                    </DialogTitle>
+                                    <Divider />
+                                    <DialogContent>
+                                        Are you sure you want to start the server? This action will overwrite ini files in the server directory!<br/>
+                                    </DialogContent>
+                                    <DialogActions>
+                                        <Button variant="solid" color="success" onClick={() => {setStartModalOpen(false); onServerStartButtonClicked()}}>
+                                            Start
+                                        </Button>
+
+                                        <Button color="primary" onClick={() => setStartModalOpen(false)}>
+                                            Cancel
+                                        </Button>
+                                        <Button variant="plain" color="neutral" onClick={() => BrowserOpenURL("https://github.com/JensvandeWiel/ArkAscendedServerManager/wiki/Custom-Configuration")}>
+                                            More Info
+                                        </Button>
+
                                     </DialogActions>
                                 </ModalDialog>
                             </Modal>

@@ -3,13 +3,20 @@ package server
 import (
 	"fmt"
 	"github.com/JensvandeWiel/ArkAscendedServerManager/helpers"
+	"github.com/go-ini/ini"
 	"github.com/sethvargo/go-password/password"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 )
 
-// region Local Helpers
+var iniOpts = ini.LoadOptions{
+	AllowShadows: true,
+}
+
 // findHighestKey returns the highest key in a map with int as key
 func findHighestKey(m map[int]*Server) int {
 	var highestKey int = -1
@@ -30,7 +37,7 @@ func generateNewDefaultServer(id int) Server {
 		serverPassword = ""
 	}*/
 
-	adminPassword, err := password.Generate(18, 6, 6, false, false)
+	adminPassword, err := password.Generate(18, 9, 0, false, false)
 	if err != nil {
 		adminPassword = "default"
 	}
@@ -64,6 +71,9 @@ func generateNewDefaultServer(id int) Server {
 		PeerPort:   7778,
 		QueryPort:  27015,
 		RCONPort:   28015,
+
+		GameUserSettings: generateNewDefaultGameUserSettings(),
+		Game:             generateNewDefaultGame(),
 
 		ServerMap:  "TheIsland_WP",
 		MaxPlayers: 70,
@@ -123,8 +133,6 @@ func CheckIfServerCorrect(server Server) error {
 
 	if server.ServerMap == "" {
 		return fmt.Errorf("server.serverMap is empty")
-	} else if server.ServerMap != "TheIsland_WP" {
-		return fmt.Errorf("server.serverMap has invalid value: %v", server.ServerMap)
 	}
 
 	return nil
@@ -158,9 +166,32 @@ func CheckServerPorts(server *Server) error {
 	return nil
 }
 
-//endregion
+func CopyAndMakeOld(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// File does not exist, return nil
+		return nil
+	}
+	// Open the source file
+	originalFile, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer originalFile.Close()
 
-//region Global and Frontend Helpers
+	// Create the destination file
+	newFile, err := os.Create(path + ".old")
+	if err != nil {
+		return err
+	}
+	defer newFile.Close()
+
+	// Copy the contents of the source file to the destination file
+	_, err = io.Copy(newFile, originalFile)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func (c *ServerController) GetNetworkInterfacesIp() map[string]string {
 
@@ -184,4 +215,32 @@ func (c *ServerController) GetServerDir() string {
 	return c.serverDir
 }
 
-//endregion
+func ensureFilePath(filePath string) error {
+	// Check if the file already exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// File does not exist, create it along with required directories
+
+		// Create any required directories
+		err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm)
+		if err != nil {
+			return err
+		}
+
+		// Create the file
+		file, err := os.Create(filePath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		// File created successfully
+		return nil
+
+	} else if err != nil {
+		// There was an error checking the file's existence
+		return err
+	}
+
+	// File already exists
+	return nil
+}
