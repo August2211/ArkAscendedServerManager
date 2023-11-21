@@ -7,14 +7,38 @@ import (
 	"github.com/sethvargo/go-password/password"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 var iniOpts = ini.LoadOptions{
 	AllowShadows: true,
+}
+
+func replaceForwardSlashInFile(filePath string) error {
+	// Read the content of the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("error reading file: %v", err)
+	}
+
+	// Convert content to string
+	contentString := string(content)
+
+	// Replace all occurrences of %2F with /
+	replacedString := strings.Replace(contentString, "/", "%2F", -1)
+
+	// Write the modified content back to the file
+	err = ioutil.WriteFile(filePath, []byte(replacedString), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing to file: %v", err)
+	}
+
+	return nil
 }
 
 // findHighestKey returns the highest key in a map with int as key
@@ -77,10 +101,15 @@ func generateNewDefaultServer(id int) Server {
 
 		ServerMap:  "TheIsland_WP",
 		MaxPlayers: 70,
+
+		StartWithApplication: false,
+
+		AutoSaveEnabled:  true,
+		AutoSaveInterval: 15,
 	}
 }
 
-func CheckIfServerCorrect(server Server) error {
+func CheckIfServerCorrect(server *Server) error {
 	if server.Id < 0 {
 		return fmt.Errorf("Checks failed: Server.Id is negative")
 	}
@@ -125,7 +154,7 @@ func CheckIfServerCorrect(server Server) error {
 				return fmt.Errorf("Check failed: Ip address not found in system interfaces: %v", server.IpAddress)
 			}
 
-			if err := CheckServerPorts(&server); err != nil {
+			if err := CheckServerPorts(server); err != nil {
 				return fmt.Errorf("Check failed: ports failed to parse: %v", err)
 			}
 		}
@@ -133,6 +162,10 @@ func CheckIfServerCorrect(server Server) error {
 
 	if server.ServerMap == "" {
 		return fmt.Errorf("server.serverMap is empty")
+	}
+
+	if server.AutoSaveInterval <= 0 {
+		return fmt.Errorf("server.AutoSaveInterval is negative or zero, it must be higher than zero")
 	}
 
 	return nil

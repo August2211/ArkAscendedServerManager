@@ -15,12 +15,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/JensvandeWiel/ArkAscendedServerManager/helpers"
-	"github.com/adrg/xdg"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"os"
 	"path"
 	"strconv"
+	"time"
+
+	"github.com/JensvandeWiel/ArkAscendedServerManager/helpers"
+	"github.com/adrg/xdg"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -29,10 +31,11 @@ const (
 
 // ServerController struct
 type ServerController struct {
-	ctx       context.Context
-	Servers   map[int]*Server
-	helpers   *helpers.HelpersController
-	serverDir string
+	ctx                context.Context
+	Servers            map[int]*Server
+	helpers            *helpers.HelpersController
+	autoSaveIterations int
+	serverDir          string
 }
 
 //region Struct Initialization and Creation
@@ -55,6 +58,91 @@ func (c *ServerController) Startup(ctx context.Context) {
 	}
 
 	c.serverDir = serverDir
+
+	c.StartServersWithApplication()
+	c.RunAutoSaveTimer()
+}
+
+// endregion
+
+// region Backend Functions
+func (c *ServerController) StartServersWithApplication() {
+	servers, err := c.getAllServers()
+	if err != nil {
+		newErr := fmt.Errorf("Error getting all servers " + err.Error())
+		runtime.LogErrorf(c.ctx, newErr.Error())
+		return
+	}
+
+	for id := range servers {
+		server := c.Servers[id]
+		runtime.LogInfof(c.ctx, "Starting server %s automatically", server.ServerName)
+		if server.StartWithApplication {
+			c.StartServer(server.Id)
+		}
+	}
+}
+
+// start repeating timer that calls auto-save
+// having one timer that manages all servers is advantageous:
+// - catches conditions where a user enables auto-save after the timer has started
+// - catches interval changes made after the timer has started
+func (c *ServerController) RunAutoSaveTimer() {
+	c.autoSaveIterations = 0
+
+	autoSave := time.NewTicker(time.Minute)
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-autoSave.C:
+				c.AutoSaveServers()
+			}
+		}
+	}()
+
+	autoSave.Stop()
+	done <- true
+	runtime.LogInfof(c.ctx, "Auto-Save Stopped")
+}
+
+func (c *ServerController) AutoSaveServers() {
+	servers, err := c.getAllServers()
+	if err != nil {
+		newErr := fmt.Errorf("Error getting all servers " + err.Error())
+		runtime.LogErrorf(c.ctx, newErr.Error())
+		return
+	}
+
+	c.autoSaveIterations += 1
+	// seconds in a minute * hours in a day * days, increase days if more days are required
+	//									  d
+	if c.autoSaveIterations == (60 * 24 * 7) { // one week in seconds
+		// very early max int catch (definitely extendable in the future if necessary)
+		c.autoSaveIterations = 0
+	}
+
+	for id := range servers {
+		server := c.Servers[id]
+		if server.AutoSaveEnabled {
+			// if interval is multiple of iterations
+			if server.AutoSaveInterval <= 0 {
+				runtime.LogError(c.ctx, "Server auto-save interval set 0 or below")
+				continue
+			}
+			if c.autoSaveIterations%server.AutoSaveInterval == 0 {
+				runtime.LogInfo(c.ctx, "Running autosave for "+server.ServerName)
+
+				err = server.SaveWorld()
+				if err != nil {
+					newErr := fmt.Errorf("Server auto-save created an error: " + err.Error())
+					runtime.LogErrorf(c.ctx, newErr.Error())
+				}
+			}
+		}
+	}
 }
 
 //endregion
@@ -195,8 +283,12 @@ func (c *ServerController) getServerFromDir(id int, shouldReturnNew bool) (Serve
 		return Server{}, fmt.Errorf("Error unmarshalling server config file: " + err.Error())
 	}
 
+	if serv.AutoSaveInterval <= 0 {
+		serv.AutoSaveInterval = 15
+	}
+
 	// Check if server is correct.
-	if err := CheckIfServerCorrect(serv); err != nil {
+	if err := CheckIfServerCorrect(&serv); err != nil {
 		return Server{}, fmt.Errorf("Parsing server instance failed: " + err.Error())
 	}
 
@@ -243,6 +335,10 @@ func (c *ServerController) getServer(id int, addToMap bool) (*Server, error) {
 			return nil, fmt.Errorf("Error getting server instance: %s", err.Error())
 		}
 
+		if s.AutoSaveInterval <= 0 {
+			s.AutoSaveInterval = 15
+		}
+
 		if addToMap {
 			c.Servers[id] = &s
 		}
@@ -252,6 +348,9 @@ func (c *ServerController) getServer(id int, addToMap bool) (*Server, error) {
 		return &s, nil
 	} else {
 		runtime.EventsEmit(c.ctx, "gotServer", server.Id)
+		if server.AutoSaveInterval <= 0 {
+			server.AutoSaveInterval = 15
+		}
 		server.ctx = c.ctx
 		return server, nil
 	}
@@ -291,7 +390,7 @@ func (c *ServerController) createServer(saveToConfig bool) (int, *Server, error)
 // saveServer saves the server, and returns an error if it fails
 func (c *ServerController) saveServer(server *Server) error {
 	// Check if server is correct.
-	if err := CheckIfServerCorrect(*server); err != nil {
+	if err := CheckIfServerCorrect(server); err != nil {
 		return fmt.Errorf("Parsing server instance failed: " + err.Error())
 	}
 	c.Servers[server.Id] = server

@@ -3,15 +3,16 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/JensvandeWiel/ArkAscendedServerManager/helpers"
-	"github.com/keybase/go-ps"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/JensvandeWiel/ArkAscendedServerManager/helpers"
+	"github.com/keybase/go-ps"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Server contains the server "stuff"
@@ -33,6 +34,7 @@ type Server struct {
 
 	ExtraDashArgs              string `json:"extraDashArgs"`
 	ExtraQuestionmarkArguments string `json:"extraQuestionmarkArguments"`
+	KickIdlePlayers            bool   `json:"kickIdlePlayers"`
 
 	Mods string `json:"mods"`
 
@@ -67,6 +69,11 @@ type Server struct {
 
 	ServerMap  string `json:"serverMap"`
 	MaxPlayers int    `json:"maxPlayers"`
+
+	StartWithApplication bool `json:"startWithApplication"`
+
+	AutoSaveEnabled  bool `json:"autoSaveEnabled"`
+	AutoSaveInterval int  `json:"autoSaveInterval"`
 }
 
 // UpdateConfig updates the configuration files for the server e.g.: GameUserSettings.ini
@@ -96,6 +103,7 @@ func (s *Server) UpdateConfig() error {
 
 //TODO Add configuration parsing/loading/saving for server specific files
 //TODO Add startup arguments parsing
+//TODO Add check for running application (ensures no accidental duplicated servers, especially with addition of start with application)
 
 func (s *Server) Start() error {
 
@@ -179,7 +187,7 @@ func (s *Server) Stop() error {
 		}
 	}
 
-	_, err := s.helpers.SendRconCommand("saveworld", s.IpAddress, s.RCONPort, s.AdminPassword)
+	err := s.SaveWorld()
 	if err != nil {
 		return err
 	}
@@ -246,6 +254,9 @@ func (s *Server) CreateArguments() []string {
 	//args = append(args, "?ServerAdminPassword="+s.AdminPassword)
 
 	args = append(args, "-WinLiveMaxPlayers="+strconv.Itoa(s.MaxPlayers))
+	if s.KickIdlePlayers {
+		args = append(args, "-EnableIdlePlayerKick")
+	}
 
 	extraArgs := strings.Split(s.ExtraDashArgs, " ")
 
@@ -254,4 +265,13 @@ func (s *Server) CreateArguments() []string {
 	}
 
 	return args
+}
+
+// save the world
+func (s *Server) SaveWorld() error {
+	_, err := s.helpers.SendRconCommand("saveworld", s.IpAddress, s.RCONPort, s.AdminPassword)
+	if err != nil {
+		return err
+	}
+	return nil
 }
